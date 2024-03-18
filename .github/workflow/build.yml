@@ -1,0 +1,47 @@
+name: Build and Deploy
+
+on:
+  schedule:
+    # 毎日9時（UTC）に実行
+    - cron: '0 9 * * *'
+  push:
+    # mainブランチにプッシュされた場合も実行
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18'
+
+      - name: Build Go binary
+        run: |
+          go build -o myapp main.go
+
+      - name: Run Go binary
+        run: |
+          ./myapp
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Build React app
+        run: |
+          cd react-app # Reactアプリが置かれているディレクトリに移動
+          npm install
+          npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./react-app/build

@@ -23,11 +23,11 @@ jobs:
 
       - name: Build Go binary
         run: |
-          go build -o myapp main.go
+          go build -o event-grepper main.go
 
       - name: Run Go binary
         run: |
-          ./myapp
+          ./event-grepper
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build React app
         run: |
-          cd react-app # Reactアプリが置かれているディレクトリに移動
+          cd event-grepper-app # Reactアプリが置かれているディレクトリに移動
           npm install
           npm run build
 
@@ -44,4 +44,4 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./react-app/build
+          publish_dir: ./event-grepper-app/build

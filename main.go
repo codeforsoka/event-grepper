@@ -61,29 +61,23 @@ func main() {
 	selection.Each(func(index int, s *goquery.Selection) {
 		selection := s.Find("a")
 		attr, exists := selection.Attr("href")
-		fmt.Println("test: 1")
 		if exists {
 			url2 := url + attr[2:]
 			doc := getDoc(url2)
-			fmt.Println("test: 2")
 			// 広報そうか令和ページの内容を取得
 			if doc != nil && strings.Contains(doc.Find("title").Text(), "広報そうか令和") {
-				fmt.Println("test: 3")
 				selection := doc.Find("div#main > div.inside > div.contents_wrap > article.article > div.txtbox > ul > li")
 				selection.Each(func(index int, s *goquery.Selection) {
 					selection := s.Find("a")
 					attr, exists := selection.Attr("href")
-					fmt.Println("test: 4")
 					if exists {
 						// 松原団地記念公園の内容が書かれたページの内容を取得
 						url3 := url2 + attr[2:]
-						fmt.Println("test: 5")
 						doc := getDoc(url3)
 						if doc != nil && strings.Contains(doc.Text(), "松原団地記念公園") {
 							var title string
 							var content string
 							var date string
-							fmt.Println("test: 6")
 							title = doc.Find("div#main > div.inside > h1 > span").Text()
 							// 内容と日程情報を取得
 							selection_header := doc.Find("div#main > div.inside > div.contents_wrap > article.article > div.txtbox > h2")

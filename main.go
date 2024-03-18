@@ -127,5 +127,5 @@ func main() {
 		fmt.Println("Error marshalling to JSON:", err)
 		return
 	}
-	os.WriteFile("park.json", output, 0644)
+	os.WriteFile("./event-grepper-app/src/park.json", output, 0644)
 }

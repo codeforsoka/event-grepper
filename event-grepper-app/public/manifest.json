@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "松原団地記念公園 イベント一覧",
+  "name": "草加市の松原団地記念公園で開催されるイベントをまとめたページです。",
   "icons": [
     {
       "src": "favicon.ico",

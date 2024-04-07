@@ -46,16 +46,12 @@ func getDoc(url string) *goquery.Document {
 	return doc
 }
 
-func main() {
+func grep(url string, infos []Information) []Information {
 
-	var infos []Information
-
-	// 令和5年広報ページの内容を取得
-	url := "https://www.city.soka.saitama.jp/kohosoka/r05/"
 	doc := getDoc(url)
 	if doc == nil {
 		fmt.Println("Can not get infomation")
-		return
+		return nil
 	}
 	selection := doc.Find("div#main > div.inside > div.contents_wrap > article.article > section.menu_section > div.section_wrap > ul.menu_list > li")
 	selection.Each(func(index int, s *goquery.Selection) {
@@ -114,6 +110,20 @@ func main() {
 			time.Sleep(200 * time.Millisecond)
 		}
 	})
+	return infos
+}
+
+func main() {
+
+	var infos []Information
+
+	// 広報ページの内容を取得
+	// TODO: URLを1年ごとに追加せず動的に決定する
+	urls := []string{"https://www.city.soka.saitama.jp/kohosoka/r06/", "https://www.city.soka.saitama.jp/kohosoka/r05/"}
+	for _, url := range urls {
+		childInfo := grep(url, infos)
+		infos = append(infos, childInfo...)
+	}
 
 	fmt.Println("infos:", infos)
 	output, err := json.MarshalIndent(&infos, "", "\t\t")

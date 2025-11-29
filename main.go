@@ -59,7 +59,10 @@ func extractEventFromPage(doc *goquery.Document, pageURL string) *Information {
 
 	// ページ全体のテキストから松原団地記念公園を含むか確認
 	pageText := doc.Text()
-	if !strings.Contains(pageText, "松原団地記念公園") {
+	hasPark := strings.Contains(pageText, "松原団地記念公園")
+	hasMatsubara := strings.Contains(pageText, "松原") && (strings.Contains(pageText, "公園") || strings.Contains(pageText, "イベント"))
+
+	if !hasPark && !hasMatsubara {
 		return nil
 	}
 
@@ -77,12 +80,12 @@ func extractEventFromPage(doc *goquery.Document, pageURL string) *Information {
 		title = strings.TrimSpace(doc.Find("title").First().Text())
 	}
 
-	// h2見出しから情報を収集（より柔軟に）
-	doc.Find("h2").Each(func(i int, h2 *goquery.Selection) {
-		h2Text := strings.TrimSpace(h2.Text())
+	// h2, h3, h4見出しから情報を収集（より柔軟に）
+	doc.Find("h2, h3, h4").Each(func(i int, heading *goquery.Selection) {
+		headingText := strings.TrimSpace(heading.Text())
 
-		// 次の要素を取得（p, ul, divなど）
-		nextElem := h2.Next()
+		// 次の要素を取得（p, ul, div, tableなど）
+		nextElem := heading.Next()
 		var elemText string
 
 		// 次の要素のテキストを取得
@@ -92,25 +95,34 @@ func extractEventFromPage(doc *goquery.Document, pageURL string) *Information {
 
 		// h2の後ろにあるすべてのp要素を取得
 		if elemText == "" {
-			h2.NextAll().Each(func(j int, s *goquery.Selection) {
+			heading.NextAll().EachWithBreak(func(j int, s *goquery.Selection) bool {
+				if s.Is("h2, h3, h4") {
+					return false // 次の見出しに到達したら停止
+				}
 				if s.Is("p") && elemText == "" {
 					elemText = strings.TrimSpace(s.Text())
+					return false
 				}
+				return true
 			})
 		}
 
 		// 内容の抽出
-		if strings.Contains(h2Text, "内容") && elemText != "" {
-			content = elemText
+		if (strings.Contains(headingText, "内容") || strings.Contains(headingText, "イベント")) && elemText != "" && len(elemText) > 10 {
+			if content == "" || len(elemText) < len(content) {
+				content = elemText
+			}
 		}
 
-		// 日程の抽出
-		if (strings.Contains(h2Text, "日程") || strings.Contains(h2Text, "日時") || strings.Contains(h2Text, "とき")) && elemText != "" {
+		// 日程の抽出（より柔軟に）
+		if (strings.Contains(headingText, "日程") || strings.Contains(headingText, "日時") ||
+		    strings.Contains(headingText, "とき") || strings.Contains(headingText, "開催")) && elemText != "" {
 			date = elemText
 		}
 
 		// 場所の抽出
-		if (strings.Contains(h2Text, "場所") || strings.Contains(h2Text, "会場") || strings.Contains(h2Text, "ところ")) && elemText != "" {
+		if (strings.Contains(headingText, "場所") || strings.Contains(headingText, "会場") ||
+		    strings.Contains(headingText, "ところ") || strings.Contains(headingText, "所在")) && elemText != "" {
 			location = elemText
 		}
 	})
@@ -133,13 +145,26 @@ func extractEventFromPage(doc *goquery.Document, pageURL string) *Information {
 		}
 	})
 
+	// 日付が見つからない場合、ページ全体から日付パターンを検索
+	if date == "" {
+		datePattern := regexp.MustCompile(`(\d+月\d+日[（(][^)）]*[)）][^。\n]{0,50})`)
+		matches := datePattern.FindStringSubmatch(pageText)
+		if len(matches) > 0 {
+			date = matches[1]
+		}
+	}
+
 	// 場所が明示されていなければ松原団地記念公園を設定
 	if location == "" || !strings.Contains(location, "松原団地記念公園") {
 		location = "松原団地記念公園"
 	}
 
 	// タイトルと日付があれば有効なイベントとみなす
-	if title != "" && date != "" {
+	// デバッグ情報
+	hasTitle := title != ""
+	hasDate := date != ""
+
+	if hasTitle && hasDate {
 		return &Information{
 			Title:    title,
 			Content:  content,
@@ -149,6 +174,11 @@ func extractEventFromPage(doc *goquery.Document, pageURL string) *Information {
 			Category: "公園イベント",
 			Source:   "広報そうか",
 		}
+	}
+
+	// デバッグ: タイトルまたは日付が欠けている場合
+	if hasPark || hasMatsubara {
+		fmt.Printf("      [スキップ] %s - タイトル:%v 日付:%v\n", pageURL, hasTitle, hasDate)
 	}
 
 	return nil
@@ -200,13 +230,24 @@ func grep(url string, infos []Information) []Information {
 
 	fmt.Printf("  月号ページ数: %d\n", len(monthIssues))
 
+	// 最新の3ヶ月分のみ処理（処理時間短縮）
+	processedCount := 0
+	maxMonths := 3
+
 	// 各月号のページをクロール
 	for issueURL := range monthIssues {
+		if processedCount >= maxMonths {
+			break
+		}
+		processedCount++
+
+		fmt.Printf("  月号処理中: %s\n", issueURL)
 		issueDoc := getDoc(issueURL)
 		if issueDoc == nil {
 			continue
 		}
 
+		monthEventCount := 0
 		// 月号ページ内のすべてのリンクをチェック
 		issueDoc.Find("a").Each(func(i int, s *goquery.Selection) {
 			href, exists := s.Attr("href")
@@ -232,14 +273,107 @@ func grep(url string, infos []Information) []Information {
 			eventInfo := extractEventFromPage(articleDoc, articleURL)
 			if eventInfo != nil {
 				seenURLs[articleURL] = true
-				fmt.Printf("  イベント取得: %s\n", eventInfo.Title)
+				fmt.Printf("    イベント取得: %s\n", eventInfo.Title)
 				infos = append(infos, *eventInfo)
+				monthEventCount++
 			}
 
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		})
 
-		time.Sleep(300 * time.Millisecond)
+		fmt.Printf("    → %d 件のイベントを取得\n", monthEventCount)
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	return infos
+}
+
+// grepParkEventPage は公園イベント専用ページから情報を収集する
+func grepParkEventPage(infos []Information) []Information {
+	url := "https://www.city.soka.saitama.jp/cont/s1805/010/010/010/PAGE000000000000079596.html"
+	doc := getDoc(url)
+	if doc == nil {
+		fmt.Println("公園イベントページの取得に失敗しました")
+		return infos
+	}
+
+	// 重複チェック用のマップ
+	seenURLs := make(map[string]bool)
+	for _, info := range infos {
+		seenURLs[info.Url] = true
+	}
+
+	// ページ全体からイベント情報を抽出
+	var events []Information
+
+	// 見出しとその下の段落から情報を抽出
+	doc.Find("h2, h3, h4").Each(func(i int, heading *goquery.Selection) {
+		title := strings.TrimSpace(heading.Text())
+
+		// イベントタイトルらしいものだけ処理
+		if title == "" || len(title) > 100 || strings.Contains(title, "問い合わせ") || strings.Contains(title, "関連") {
+			return
+		}
+
+		var content string
+		var date string
+		var location string
+
+		// 見出しの次の要素から情報を取得
+		heading.NextAll().EachWithBreak(func(j int, elem *goquery.Selection) bool {
+			if elem.Is("h2, h3, h4") {
+				// 次の見出しに到達したら終了
+				return false
+			}
+
+			text := strings.TrimSpace(elem.Text())
+
+			// 日時情報を探す
+			if strings.Contains(text, "月") && strings.Contains(text, "日") {
+				if date == "" {
+					date = text
+				}
+			}
+
+			// 場所情報を探す
+			if strings.Contains(text, "公園") {
+				if location == "" {
+					location = text
+				}
+			}
+
+			// 内容として追加
+			if content == "" && len(text) > 10 && len(text) < 500 {
+				content = text
+			}
+
+			return true
+		})
+
+		// 松原団地記念公園またはその他の公園のイベント
+		if date != "" && (strings.Contains(title, "松原") || strings.Contains(location, "松原") || strings.Contains(content, "松原")) {
+			info := Information{
+				Title:    title,
+				Content:  content,
+				Date:     date,
+				Url:      url,
+				Location: "松原団地記念公園",
+				Category: "公園イベント",
+				Source:   "公園イベント情報",
+			}
+			events = append(events, info)
+		}
+	})
+
+	// 重複チェックして追加
+	for _, event := range events {
+		// URLが同じ＋タイトルが同じ場合のみ重複とみなす
+		key := event.Url + "|" + event.Title
+		if !seenURLs[key] {
+			seenURLs[key] = true
+			infos = append(infos, event)
+			fmt.Printf("  公園イベントページから取得: %s\n", event.Title)
+		}
 	}
 
 	return infos
@@ -429,23 +563,43 @@ func getKohosokaUrls() []string {
 func main() {
 
 	var infos []Information
+	seenURLs := make(map[string]bool) // 全体の重複チェック用
 
 	fmt.Println("=== 広報そうかからイベント情報を収集 ===")
-	// 広報ページから年度URLを自動取得
-	urls := getKohosokaUrls()
-	for _, url := range urls {
-		childInfo := grep(url, infos)
-		infos = append(infos, childInfo...)
+	// 最新の年度のみを対象にする（処理時間短縮と最新情報取得のため）
+	urls := []string{
+		"https://www.city.soka.saitama.jp/kohosoka/r06/", // 令和6年のみ
 	}
-	fmt.Printf("広報そうかから %d 件のイベントを取得\n", len(infos))
 
-	fmt.Println("\n=== イベント情報ページから収集 ===")
-	// イベント一覧ページから情報を収集
+	for _, url := range urls {
+		fmt.Printf("\n年度ページ処理中: %s\n", url)
+		childInfo := grep(url, infos)
+
+		// 重複チェックして追加
+		addedCount := 0
+		for _, info := range childInfo {
+			if !seenURLs[info.Url] {
+				seenURLs[info.Url] = true
+				infos = append(infos, info)
+				addedCount++
+			}
+		}
+		fmt.Printf("  → %d 件を追加（重複除外後）\n", addedCount)
+	}
+	fmt.Printf("\n広報そうかから %d 件のイベントを取得\n", len(infos))
+
+	fmt.Println("\n=== 公園イベント専用ページから収集 ===")
 	initialCount := len(infos)
-	infos = grepEventList(infos)
-	fmt.Printf("イベント情報から %d 件のイベントを取得\n", len(infos)-initialCount)
+	infos = grepParkEventPage(infos)
+	newCount := len(infos) - initialCount
+	fmt.Printf("公園イベントページから %d 件のイベントを取得\n", newCount)
 
 	fmt.Printf("\n総計: %d 件のイベント情報を収集しました\n", len(infos))
+
+	if len(infos) == 0 {
+		fmt.Println("警告: イベント情報が1件も取得できませんでした")
+	}
+
 	output, err := json.MarshalIndent(&infos, "", "\t\t")
 	if err != nil {
 		fmt.Println("Error marshalling to JSON:", err)

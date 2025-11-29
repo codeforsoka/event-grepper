@@ -111,7 +111,7 @@ const EventCalendar: React.FC<EventCalendarProps> = ({ events }) => {
           time: '時間',
           event: 'イベント',
           noEventsInRange: 'この期間にイベントはありません',
-          showMore: (total) => `+${total} 件`,
+          showMore: (total: number) => `+${total} 件`,
         }}
         culture="ja"
       />

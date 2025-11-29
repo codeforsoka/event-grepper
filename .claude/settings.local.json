@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(go build:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(./event-grepper)",
+      "Bash(timeout 60 go build:*)"
     ],
     "deny": [],
     "ask": []

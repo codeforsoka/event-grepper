@@ -8,40 +8,74 @@ on:
     # mainブランチにプッシュされた場合も実行
     branches:
       - main
+  workflow_dispatch: # 手動実行を可能にする
+
+permissions:
+  contents: write # GitHub Pagesへのデプロイに必要
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22.1'
+
+      - name: Start Ollama service
+        run: |
+          # Ollamaコンテナを起動
+          docker run -d \
+            --name ollama \
+            -p 11434:11434 \
+            ollama/ollama:latest
+
+          # Ollamaの起動を待機
+          echo "Waiting for Ollama to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+              echo "Ollama is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Ollama not ready yet..."
+            sleep 2
+          done
+
+          # llama3.1:8bモデルをpull（より大きく高精度なモデル）
+          echo "Pulling llama3.1:8b model..."
+          docker exec ollama ollama pull llama3.1:8b
+
+          # モデルが利用可能か確認
+          echo "Available models:"
+          docker exec ollama ollama list
 
       - name: Build Go binary
         run: |
           go build -o event-grepper main.go
 
       - name: Run Go binary
+        env:
+          OLLAMA_HOST: http://localhost:11434
         run: |
           ./event-grepper
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Build React app
         run: |
-          cd event-grepper-app # Reactアプリが置かれているディレクトリに移動
+          cd event-grepper-app
           npm install
           npm run build
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./event-grepper-app/build

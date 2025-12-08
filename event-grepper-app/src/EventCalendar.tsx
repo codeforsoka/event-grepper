@@ -41,18 +41,25 @@ const EventCalendar: React.FC<EventCalendarProps> = ({ events }) => {
   const calendarEvents = useMemo(() => {
     return events.map((event): CalendarEvent => {
       // 日付文字列をパースして Date オブジェクトに変換
-      let startDate = new Date();
-
-      // 様々な日付フォーマットに対応
       const dateStr = event.date;
+      let startDate: Date;
 
-      // "3月20日" のような形式
-      const jpDateMatch = dateStr.match(/(\d+)月(\d+)日/);
-      if (jpDateMatch) {
-        const month = parseInt(jpDateMatch[1]) - 1;
-        const day = parseInt(jpDateMatch[2]);
-        const year = new Date().getFullYear();
-        startDate = new Date(year, month, day);
+      // YYYY-MM-DD形式に対応（やしおんから取得した日付）
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        startDate = parse(dateStr, 'yyyy-MM-dd', new Date());
+      }
+      // "3月20日" のような日本語形式（後方互換性）
+      else {
+        const jpDateMatch = dateStr.match(/(\d+)月(\d+)日/);
+        if (jpDateMatch) {
+          const month = parseInt(jpDateMatch[1]) - 1;
+          const day = parseInt(jpDateMatch[2]);
+          const year = new Date().getFullYear();
+          startDate = new Date(year, month, day);
+        } else {
+          // パースできない場合は今日の日付
+          startDate = new Date();
+        }
       }
 
       return {

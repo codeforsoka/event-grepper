@@ -31,11 +31,11 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <h1 className="heading">草加市 イベント情報</h1>
+          <h1 className="heading">やしおんイベントカレンダー</h1>
           <p className="description">
-            草加市で開催されるイベントをまとめたページです。
+            八潮・草加エリアで開催されるイベントをまとめたカレンダーです。
             <br />
-            草加市役所から情報発信されたイベント情報を収集しています。
+            情報提供: <a href="https://yashion.jp/event/" target="_blank" rel="noopener noreferrer" className="source-link">やしおん</a>
           </p>
         </div>
       </header>
@@ -120,7 +120,7 @@ function App() {
 
       <footer className="footer">
         <p>
-          &copy; 2024 草加市イベント情報 | データ提供: 草加市役所
+          &copy; 2024 やしおんイベントカレンダー | データ提供: <a href="https://yashion.jp/" target="_blank" rel="noopener noreferrer">やしおん</a>
         </p>
       </footer>
     </div>
